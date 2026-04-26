@@ -14,6 +14,9 @@ debug/
 auth-state.json
 test-auth-state.json
 
+# Production DB (managed in parent repo or fork)
+moneyforward.db
+
 test-groups-moneyforward.db
 test-moneyforward.db*
 *.db-shm
