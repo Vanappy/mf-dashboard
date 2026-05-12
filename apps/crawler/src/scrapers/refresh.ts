@@ -66,8 +66,14 @@ export async function clickRefreshButton(page: Page): Promise<RefreshResult> {
   await page.goto(mfUrls.home);
   await page.waitForLoadState("networkidle");
 
-  const refreshButton = page.locator('a:has-text("更新")').first();
-  await refreshButton.click();
+  // Try visible refresh button first, fallback to JS click
+  const refreshButton = page.locator('a:has-text("更新"):visible').first();
+  try {
+    await refreshButton.click({ timeout: 10000 });
+  } catch {
+    warn("Refresh button click failed, trying JavaScript click...");
+    await refreshButton.evaluate((el) => (el as HTMLElement).click());
+  }
 
   info("Refreshing accounts...");
 

@@ -50,7 +50,7 @@ export async function sendDiscordErrorNotification(err: Error): Promise<void> {
   const avatarUrl = getAvatarUrl();
 
   if (!webhookUrl) {
-    error("DISCORD_WEBHOOK_URL is not set, cannot send error notification");
+    log("DISCORD_WEBHOOK_URL is not set, skipping error notification");
     return;
   }
 

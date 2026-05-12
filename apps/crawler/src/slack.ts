@@ -48,7 +48,7 @@ export async function sendErrorNotification(err: Error): Promise<void> {
   const channelId = getChannelId();
 
   if (!slack || !channelId) {
-    error("SLACK_BOT_TOKEN or SLACK_CHANNEL_ID is not set, cannot send error notification");
+    log("SLACK_BOT_TOKEN or SLACK_CHANNEL_ID is not set, skipping error notification");
     return;
   }
 
