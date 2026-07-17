@@ -66,8 +66,9 @@ export async function clickRefreshButton(page: Page): Promise<RefreshResult> {
   await page.goto(mfUrls.home);
   await page.waitForLoadState("networkidle");
 
-  // Try visible refresh button first, fallback to JS click
-  const refreshButton = page.locator('a:has-text("更新"):visible').first();
+  // Use the exact "一括更新" label (upstream), but keep the hidden-button
+  // fallback from the fork: try a normal click first, then a JS click.
+  const refreshButton = page.locator('a:has-text("一括更新")').first();
   try {
     await refreshButton.click({ timeout: 10000 });
   } catch {

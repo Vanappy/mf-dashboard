@@ -23,9 +23,10 @@
   "dependencies": {
     "@1password/sdk": "0.4.0",
     "@mf-dashboard/analytics": "workspace:*",
+    "@mf-dashboard/date-utils": "workspace:*",
     "@mf-dashboard/db": "workspace:*",
     "@mf-dashboard/meta": "workspace:*",
-    "@slack/web-api": "7.15.2",
+    "@slack/web-api": "7.17.0",
     "drizzle-orm": "catalog:"
   },
   "devDependencies": {

@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "setup": "corepack enable pnpm",
+    "postinstall": "pnpm --filter @mf-dashboard/crawler exec playwright install",
     "dev": "turbo dev",
     "dev:demo": "turbo dev:demo",
     "build": "turbo build",
@@ -15,19 +16,21 @@
     "test:e2e:web": "turbo test:e2e --filter=@mf-dashboard/web",
     "test:e2e:crawler": "turbo test:e2e --filter=@mf-dashboard/crawler",
     "test:e2e:real": "pnpm --filter @mf-dashboard/db-e2e test",
+    "test:storybook": "pnpm --filter @mf-dashboard/web test:storybook",
     "typecheck": "turbo typecheck",
     "lint": "oxlint --type-aware --fix",
     "format": "oxfmt",
+    "format:check": "oxfmt --check .",
     "knip": "knip"
   },
   "devDependencies": {
-    "knip": "6.0.6",
-    "lefthook": "2.1.6",
-    "oxfmt": "0.41.0",
-    "oxlint": "1.56.0",
-    "oxlint-tsgolint": "0.17.4",
-    "tsx": "4.21.0",
-    "turbo": "2.8.20"
+    "knip": "6.17.1",
+    "lefthook": "2.1.9",
+    "oxfmt": "0.55.0",
+    "oxlint": "1.70.0",
+    "oxlint-tsgolint": "0.23.0",
+    "tsx": "4.22.4",
+    "turbo": "2.9.18"
   },
-  "packageManager": "pnpm@10.33.0"
+  "packageManager": "pnpm@11.7.0"
 }

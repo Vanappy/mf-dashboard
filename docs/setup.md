@@ -73,10 +73,11 @@ Cloudflare OneにIdentity Providerの登録(`/integrations/identity-providers`)�
 
 ### Variables
 
-| Key              | Required | Value | Why                                            |
-| ---------------- | -------- | ----- | ---------------------------------------------- |
-| RUN_TASK         | ✅       | true  | crontabの実行に必要                            |
-| CACHE_AUTH_STATE |          | true  | 認証状態をキャッシュし毎回のログインをスキップ |
+| Key              | Required | Value | Why                                                               |
+| ---------------- | -------- | ----- | ----------------------------------------------------------------- |
+| RUN_TASK         | ✅       | true  | crontabの実行に必要                                               |
+| CACHE_AUTH_STATE |          | true  | 認証状態をキャッシュし毎回のログインをスキップ (default: false)   |
+| CLEANUP_GROUPS   |          | true  | MoneyForwardから削除されたグループをDBからも削除 (default: false) |
 
 ### Secrets
 
@@ -110,15 +111,3 @@ Cloudflare OneにIdentity Providerの登録(`/integrations/identity-providers`)�
 ## 4. 実行
 
 作ったリポジトリの`/actions/workflows/daily-update.yml`へ行くとRun Workflowがあるので、手動実行し、SQLiteがコミットされたら成功。
-
-## バージョン更新
-
-```sh
-$ sh update.sh
-```
-
-```sh
-$ git pull origin main
-$ git pull upstream --no-ff
-$ git push -f origin main
-```

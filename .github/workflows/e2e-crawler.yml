@@ -26,8 +26,10 @@ jobs:
     if: needs.check.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.3
       - uses: ./.github/actions/setup-node
+        with:
+          playwright-browsers: chromium
       - uses: ./.github/actions/auth-state-cache
         with:
           mode: restore
@@ -46,14 +48,14 @@ jobs:
           enabled: ${{ vars.CACHE_AUTH_STATE }}
       - name: Upload screenshots on failure
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: e2e-screenshots
           path: apps/crawler/tests/e2e/screenshots/
           if-no-files-found: ignore
       - name: Notify Slack on failure
         if: failure()
-        uses: slackapi/slack-github-action@v3.0.1
+        uses: slackapi/slack-github-action@v3.0.3
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}

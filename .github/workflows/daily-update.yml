@@ -33,8 +33,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.3
       - uses: ./.github/actions/setup-node
+        with:
+          playwright-browsers: chromium
       - uses: ./.github/actions/auth-state-cache
         with:
           mode: restore
@@ -50,6 +52,7 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           DISCORD_AVATAR_URL: ${{ secrets.DISCORD_AVATAR_URL }}
           DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+          CLEANUP_GROUPS: ${{ vars.CLEANUP_GROUPS }}
       - uses: ./.github/actions/auth-state-cache
         if: always()
         with:

@@ -5,8 +5,14 @@ import type { Locator, Page } from "playwright";
 import { debug } from "../logger.js";
 import { parseDecimalNumber, parseJapaneseNumber, parsePercentage } from "../parsers.js";
 
-// Asset category constant for points (used for category check in parsing)
-const POINT = ASSET_CATEGORIES[5]; // "ポイント・マイル"
+const LEGACY_DEPOSIT_CATEGORY = "預金・現金・暗号資産";
+const DEPOSIT_TABLE_CATEGORIES = new Set([
+  LEGACY_DEPOSIT_CATEGORY,
+  "預金・現金",
+  "暗号資産",
+  "電子マネー・プリペイド",
+]);
+const POINT_CATEGORIES = new Set(["ポイント・マイル", "ポイント"]);
 const UNKNOWN_CATEGORY = "不明";
 
 // Column indices for each table type
@@ -72,28 +78,68 @@ async function getInstitutionFromCell(cells: Locator, index: number): Promise<st
   }
 }
 
+async function getPrecedingSectionTitle(table: Locator): Promise<string> {
+  return table.evaluate((el) => {
+    let prev = el.previousElementSibling;
+    while (prev) {
+      const h1 = prev.tagName === "H1" ? prev : prev.querySelector("h1.heading-normal");
+      if (h1) {
+        return h1.textContent?.trim() || "";
+      }
+      prev = prev.previousElementSibling;
+    }
+    return "";
+  });
+}
+
+export function resolveDepositTableCategory(titleText: string): string {
+  const category = titleText.trim();
+  return DEPOSIT_TABLE_CATEGORIES.has(category) ? category : LEGACY_DEPOSIT_CATEGORY;
+}
+
+export function parseDepositPortfolioItem(
+  category: string,
+  nameText: string,
+  institution: string,
+  balanceText: string,
+): PortfolioItem | null {
+  const name = nameText.trim();
+  if (!name) return null;
+
+  return {
+    name,
+    type: category,
+    institution,
+    balance: parseJapaneseNumber(balanceText),
+  };
+}
+
 // Parse deposits from .table-depo
 async function parseDeposits(page: Page): Promise<PortfolioItem[]> {
-  const rows = page.locator("table.table-depo tbody tr");
-  const count = await rows.count();
+  const tables = page.locator("table.table-depo");
+  const tableCount = await tables.count();
   const items: PortfolioItem[] = [];
 
-  for (let i = 0; i < count; i++) {
-    const cells = rows.nth(i).locator("td");
-    // 並列取得
-    const [name, institution, balanceText] = await Promise.all([
-      getCellText(cells, DEPOSIT_COLUMNS.NAME),
-      getInstitutionFromCell(cells, DEPOSIT_COLUMNS.INSTITUTION),
-      getCellText(cells, DEPOSIT_COLUMNS.BALANCE, "0"),
-    ]);
-    if (!name) continue;
+  for (let t = 0; t < tableCount; t++) {
+    const table = tables.nth(t);
+    const sectionTitle = await getPrecedingSectionTitle(table);
+    const category = resolveDepositTableCategory(sectionTitle);
+    debug(`  .table-depo[${t}] title: "${sectionTitle}" -> ${category}`);
 
-    items.push({
-      name,
-      type: "預金・現金・暗号資産",
-      institution,
-      balance: parseJapaneseNumber(balanceText),
-    });
+    const rows = table.locator("tbody tr");
+    const count = await rows.count();
+
+    for (let i = 0; i < count; i++) {
+      const cells = rows.nth(i).locator("td");
+      // 並列取得
+      const [name, institution, balanceText] = await Promise.all([
+        getCellText(cells, DEPOSIT_COLUMNS.NAME),
+        getInstitutionFromCell(cells, DEPOSIT_COLUMNS.INSTITUTION),
+        getCellText(cells, DEPOSIT_COLUMNS.BALANCE, "0"),
+      ]);
+      const item = parseDepositPortfolioItem(category, name, institution, balanceText);
+      if (item) items.push(item);
+    }
   }
   return items;
 }
@@ -101,6 +147,51 @@ async function parseDeposits(page: Page): Promise<PortfolioItem[]> {
 // Helper to convert 0 to undefined only for optional numeric fields
 function orUndefined(value: number): number | undefined {
   return value || undefined;
+}
+
+export function parseOptionalJapaneseNumber(text: string): number | undefined {
+  const trimmed = text.trim();
+  if (!trimmed || ["-", "−", "—", "–", "―"].includes(trimmed)) {
+    return undefined;
+  }
+  return parseJapaneseNumber(trimmed);
+}
+
+export function isPointCategory(category: string): boolean {
+  return POINT_CATEGORIES.has(category);
+}
+
+export function parsePnsPortfolioItem(
+  category: string,
+  cellTexts: readonly string[],
+): PortfolioItem | null {
+  const name = cellTexts[0]?.trim() ?? "";
+  if (!name) return null;
+
+  if (isPointCategory(category)) {
+    return {
+      name,
+      type: category,
+      institution: cellTexts[POINT_COLUMNS.INSTITUTION]?.trim() ?? "",
+      balance: parseJapaneseNumber(cellTexts[POINT_COLUMNS.BALANCE] ?? "0"),
+    };
+  }
+
+  return {
+    name,
+    type: category,
+    institution: "",
+    balance: parseJapaneseNumber(cellTexts[INSURANCE_PENSION_COLUMNS.BALANCE] ?? "0"),
+    avgCostPrice: orUndefined(
+      parseJapaneseNumber(cellTexts[INSURANCE_PENSION_COLUMNS.AVG_COST] ?? ""),
+    ),
+    unrealizedGain: parseOptionalJapaneseNumber(
+      cellTexts[INSURANCE_PENSION_COLUMNS.UNREALIZED_GAIN] ?? "",
+    ),
+    unrealizedGainPct: parsePercentage(
+      cellTexts[INSURANCE_PENSION_COLUMNS.UNREALIZED_GAIN_PCT] ?? "",
+    ),
+  };
 }
 
 // Parse stocks from .table-eq
@@ -138,7 +229,7 @@ async function parseStocks(page: Page): Promise<PortfolioItem[]> {
     if (!name) continue;
 
     // Parse daily change - keep 0 as valid value (only undefined if empty)
-    const dailyChange = dailyChangeText ? parseJapaneseNumber(dailyChangeText) : undefined;
+    const dailyChange = parseOptionalJapaneseNumber(dailyChangeText);
 
     items.push({
       name,
@@ -150,7 +241,7 @@ async function parseStocks(page: Page): Promise<PortfolioItem[]> {
       avgCostPrice: orUndefined(parseDecimalNumber(avgCostText)),
       unitPrice: orUndefined(parseDecimalNumber(unitPriceText)),
       dailyChange,
-      unrealizedGain: parseJapaneseNumber(unrealizedGainText) || undefined,
+      unrealizedGain: parseOptionalJapaneseNumber(unrealizedGainText),
       unrealizedGainPct: parsePercentage(unrealizedGainPctText),
     });
   }
@@ -190,7 +281,7 @@ async function parseFunds(page: Page): Promise<PortfolioItem[]> {
     if (!name) continue;
 
     // Parse daily change - keep 0 as valid value (only undefined if empty)
-    const dailyChange = dailyChangeText ? parseJapaneseNumber(dailyChangeText) : undefined;
+    const dailyChange = parseOptionalJapaneseNumber(dailyChangeText);
 
     items.push({
       name,
@@ -201,7 +292,7 @@ async function parseFunds(page: Page): Promise<PortfolioItem[]> {
       avgCostPrice: orUndefined(parseDecimalNumber(avgCostText)),
       unitPrice: orUndefined(parseDecimalNumber(unitPriceText)),
       dailyChange,
-      unrealizedGain: parseJapaneseNumber(unrealizedGainText) || undefined,
+      unrealizedGain: parseOptionalJapaneseNumber(unrealizedGainText),
       unrealizedGainPct: parsePercentage(unrealizedGainPctText),
     });
   }
@@ -211,7 +302,7 @@ async function parseFunds(page: Page): Promise<PortfolioItem[]> {
 // Get category from section title (h1.heading-normal before the table)
 // Returns the title if it's a valid asset category, otherwise returns "不明"
 export function identifyTableTypeFromTitle(titleText: string): string {
-  // ASSET_CATEGORIES: ["預金・現金・暗号資産", "株式(現物)", "投資信託", "保険", "年金", "ポイント・マイル"]
+  // ASSET_CATEGORIES includes both legacy combined labels and current split labels.
   const validCategories = new Set(ASSET_CATEGORIES);
   if (validCategories.has(titleText as (typeof ASSET_CATEGORIES)[number])) {
     return titleText;
@@ -228,21 +319,7 @@ async function parseInsuranceAndPoints(page: Page): Promise<PortfolioItem[]> {
   for (let t = 0; t < tableCount; t++) {
     const table = tables.nth(t);
 
-    // Get section title from preceding h1.heading-normal element
-    const sectionTitle = await table.evaluate((el) => {
-      // Look for h1.heading-normal in preceding siblings
-      let prev = el.previousElementSibling;
-      while (prev) {
-        // Check if this element or its children contain h1.heading-normal
-        const h1 = prev.tagName === "H1" ? prev : prev.querySelector("h1.heading-normal");
-        if (h1) {
-          return h1.textContent?.trim() || "";
-        }
-        prev = prev.previousElementSibling;
-      }
-      return "";
-    });
-
+    const sectionTitle = await getPrecedingSectionTitle(table);
     const category = identifyTableTypeFromTitle(sectionTitle);
     debug(`  .table-pns[${t}] title: "${sectionTitle}" -> ${category}`);
 
@@ -251,45 +328,12 @@ async function parseInsuranceAndPoints(page: Page): Promise<PortfolioItem[]> {
 
     for (let i = 0; i < rowCount; i++) {
       const cells = rows.nth(i).locator("td");
-
-      if (category === POINT) {
-        // 並列取得（ポイント）
-        const [name, institution, balanceText] = await Promise.all([
-          getCellText(cells, 0),
-          getCellText(cells, POINT_COLUMNS.INSTITUTION),
-          getCellText(cells, POINT_COLUMNS.BALANCE, "0"),
-        ]);
-        if (!name) continue;
-
-        items.push({
-          name,
-          type: category,
-          institution,
-          balance: parseJapaneseNumber(balanceText),
-        });
-      } else {
-        // 並列取得（保険・年金）
-        const [name, balanceText, avgCostText, unrealizedGainText, unrealizedGainPctText] =
-          await Promise.all([
-            getCellText(cells, 0),
-            getCellText(cells, INSURANCE_PENSION_COLUMNS.BALANCE, "0"),
-            getCellText(cells, INSURANCE_PENSION_COLUMNS.AVG_COST),
-            getCellText(cells, INSURANCE_PENSION_COLUMNS.UNREALIZED_GAIN),
-            getCellText(cells, INSURANCE_PENSION_COLUMNS.UNREALIZED_GAIN_PCT),
-          ]);
-        if (!name) continue;
-
-        // Insurance and Pension share the same 8-column structure
-        items.push({
-          name,
-          type: category,
-          institution: "",
-          balance: parseJapaneseNumber(balanceText),
-          avgCostPrice: orUndefined(parseJapaneseNumber(avgCostText)),
-          unrealizedGain: parseJapaneseNumber(unrealizedGainText) || undefined,
-          unrealizedGainPct: parsePercentage(unrealizedGainPctText),
-        });
-      }
+      const cellCount = await cells.count();
+      const cellTexts = await Promise.all(
+        Array.from({ length: cellCount }, (_, index) => getCellText(cells, index)),
+      );
+      const item = parsePnsPortfolioItem(category, cellTexts);
+      if (item) items.push(item);
     }
   }
   return items;

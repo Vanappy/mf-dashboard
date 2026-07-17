@@ -1,15 +1,14 @@
 import type { KnipConfig } from "knip";
 
+const localOnlyIgnoreDependencies = process.env.CI ? [] : ["lefthook"];
+
 const config: KnipConfig = {
+  ...(localOnlyIgnoreDependencies.length > 0 && {
+    ignoreDependencies: localOnlyIgnoreDependencies,
+  }),
   workspaces: {
-    "apps/web": {
-      ignoreDependencies: ["postcss"],
-    },
     "apps/crawler": {
       ignore: ["src/hooks/helpers.ts"],
-    },
-    "apps/simulator": {
-      ignoreDependencies: ["postcss"],
     },
     "apps/mcp": {
       ignoreDependencies: ["@libsql/client"],

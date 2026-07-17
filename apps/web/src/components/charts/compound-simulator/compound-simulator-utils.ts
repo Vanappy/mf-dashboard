@@ -60,6 +60,11 @@ export function computeMonthlyWithdrawalForSummary(
   return fixedAmount;
 }
 
+export function computeRateWithdrawalBasis(projection: YearlyProjection | undefined): number {
+  if (!projection) return 0;
+  return projection.principal + projection.interest + projection.tax;
+}
+
 export function computeMcDrawdownEndValue(
   withdrawalYears: number,
   yearlyData: MonteCarloYearData[],
@@ -78,7 +83,7 @@ export function computeTotalWithdrawalAmount(
   return projections.filter((p) => p.isWithdrawing).reduce((sum, p) => sum + p.yearlyWithdrawal, 0);
 }
 
-interface FanChartDataPoint {
+export interface FanChartDataPoint {
   year: number;
   p10: number;
   p25: number;
