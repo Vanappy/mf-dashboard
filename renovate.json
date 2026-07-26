@@ -11,7 +11,7 @@
   ],
   "rangeStrategy": "pin",
   "labels": ["deps"],
-  "baseBranchPatterns": ["new-release"],
+  "baseBranchPatterns": ["main"],
   "additionalBranchPrefix": "{{baseBranch}}-",
   "packageRules": [
     {
