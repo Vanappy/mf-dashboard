@@ -52,6 +52,8 @@ Webアプリ右下の家計AIチャットでは、「先月の食費はいくら
 
 積立額や取崩額、年金などの条件を設定し、モンテカルロ法で資産推移をシミュレーションできる。[公開サイト](https://asset-melt.party/)でも利用可能。
 
+<img src="./.github/assets/simulator.png" alt="複利シミュレーション画面" />
+
 ## システム構成
 
 Docker Composeで次の3サービスを動かす。
