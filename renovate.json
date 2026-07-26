@@ -11,6 +11,8 @@
   ],
   "rangeStrategy": "pin",
   "labels": ["deps"],
+  "baseBranchPatterns": ["new-release"],
+  "additionalBranchPrefix": "{{baseBranch}}-",
   "packageRules": [
     {
       "groupName": "npm patch dependencies",
