@@ -1,9 +1,14 @@
+import { randomUUID } from "node:crypto";
+import { rm } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { getDb, schema } from "@mf-dashboard/db";
 import { saveScrapedData, saveGroupOnlyData } from "@mf-dashboard/db/repository/save-scraped-data";
 import { eq } from "drizzle-orm";
 import type { Browser, BrowserContext } from "playwright";
 import { describe, test, expect, beforeAll, afterAll } from "vitest";
+import { runInstitutionCategoryPhase } from "../../src/crawler-phases.js";
+import { createCrawlerProgressReporter } from "../../src/crawler-progress.js";
 import { buildScrapedData, buildGroupOnlyScrapedData } from "../../src/data-builder.js";
 import type { ScrapeResult } from "../../src/scraper.js";
 import { scrapeAllGroups } from "../../src/scraper.js";
@@ -20,6 +25,7 @@ import {
 
 const TEST_DB_DIR = path.resolve(process.cwd(), "tests/e2e");
 const TEST_DB_PATH = path.join(TEST_DB_DIR, "test-groups-moneyforward.db");
+const PROGRESS_STATE_PATH = path.join(os.tmpdir(), `db-save-groups-${randomUUID()}.json`);
 
 let browser: Browser;
 let context: BrowserContext;
@@ -38,16 +44,22 @@ beforeAll(async () => {
     return withErrorScreenshot(page, "db-save-groups-test-error.png", async () => {
       await using _scope = await createGroupScope(page);
 
-      const result = await scrapeAllGroups(page, { skipRefresh: true });
+      const progress = await createCrawlerProgressReporter(PROGRESS_STATE_PATH, {
+        id: randomUUID(),
+        source: "e2e",
+        startedAt: new Date().toISOString(),
+      });
+      const result = await scrapeAllGroups(page, progress, { skipRefresh: true });
 
       // 保存処理（index.ts と同じフロー）
       const db = getDb();
+      const institutionCategories = await runInstitutionCategoryPhase(page);
 
       // 「グループ選択なし」のデータを保存
       const noGroupData = result.groupDataList.find((gd) => isNoGroup(gd.group.id));
       if (noGroupData) {
         const scrapedData = buildScrapedData(result.globalData, noGroupData);
-        await saveScrapedData(db, scrapedData);
+        await saveScrapedData(db, scrapedData, institutionCategories);
       }
 
       // 各グループはグループ固有データのみ保存
@@ -67,6 +79,7 @@ afterAll(async () => {
   await browser?.close();
   // テスト後にクリーンアップ
   cleanupTestDb(TEST_DB_PATH);
+  await rm(PROGRESS_STATE_PATH, { force: true });
 });
 
 describe("グループ保存（新フロー）", () => {

@@ -1,5 +1,5 @@
-import { eq, like, sql } from "drizzle-orm";
-import type { Db } from "../index";
+import { eq, inArray, like, sql } from "drizzle-orm";
+import type { Db, DbExecutor } from "../index";
 import { schema } from "../index";
 import type { CashFlowItem } from "../types";
 import { convertToIsoDate, now, upsertById } from "../utils";
@@ -7,7 +7,7 @@ import { convertToIsoDate, now, upsertById } from "../utils";
 const BATCH_SIZE = 500;
 
 export async function saveTransaction(
-  db: Db,
+  db: DbExecutor,
   item: CashFlowItem,
   accountIdMap?: Map<string, number>,
 ): Promise<void> {
@@ -80,11 +80,31 @@ export async function hasTransactionsForMonth(db: Db, month: string): Promise<bo
   return (result?.count ?? 0) > 0;
 }
 
+export async function findExistingTransactionMfIds(db: Db, mfIds: string[]): Promise<Set<string>> {
+  if (mfIds.length === 0) return new Set();
+
+  const existingMfIds = new Set<string>();
+  for (let i = 0; i < mfIds.length; i += BATCH_SIZE) {
+    const batch = mfIds.slice(i, i + BATCH_SIZE);
+    const rows = await db
+      .select({ mfId: schema.transactions.mfId })
+      .from(schema.transactions)
+      .where(inArray(schema.transactions.mfId, batch))
+      .all();
+
+    for (const row of rows) {
+      existingMfIds.add(row.mfId);
+    }
+  }
+
+  return existingMfIds;
+}
+
 /**
  * 指定月のトランザクションを削除
  * @param month "2026-01" 形式
  */
-export async function deleteTransactionsForMonth(db: Db, month: string): Promise<number> {
+export async function deleteTransactionsForMonth(db: DbExecutor, month: string): Promise<number> {
   const result = await db
     .delete(schema.transactions)
     .where(like(schema.transactions.date, `${month}%`))
@@ -158,8 +178,8 @@ function prepareTransactionData(
 /**
  * 指定月のトランザクションを保存（既存データは削除して上書き）
  */
-export async function saveTransactionsForMonth(
-  db: Db,
+export async function replaceTransactionsForMonth(
+  db: DbExecutor,
   month: string,
   items: CashFlowItem[],
   accountIdMap?: Map<string, number>,
@@ -216,4 +236,28 @@ export async function saveTransactionsForMonth(
   }
 
   return validItems.length;
+}
+
+export async function saveTransactionsForMonths(
+  db: Db,
+  months: Array<{ items: CashFlowItem[]; month: string }>,
+  accountIdMap?: Map<string, number>,
+): Promise<number[]> {
+  return db.transaction(async (transaction) => {
+    const savedCounts: number[] = [];
+    for (const { items, month } of months) {
+      savedCounts.push(await replaceTransactionsForMonth(transaction, month, items, accountIdMap));
+    }
+    return savedCounts;
+  });
+}
+
+export async function saveTransactionsForMonth(
+  db: Db,
+  month: string,
+  items: CashFlowItem[],
+  accountIdMap?: Map<string, number>,
+): Promise<number> {
+  const [savedCount = 0] = await saveTransactionsForMonths(db, [{ items, month }], accountIdMap);
+  return savedCount;
 }

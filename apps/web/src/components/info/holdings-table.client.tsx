@@ -1,8 +1,10 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { sortByAmountDescending } from "../../lib/amount-order";
+import { CHART_INITIAL_DIMENSION } from "../../lib/chart";
 import { getChartColorArray } from "../../lib/colors";
 import { formatCurrency, formatPercent } from "../../lib/format";
 import { cn } from "../../lib/utils";
@@ -10,6 +12,7 @@ import { chartTooltipStyle } from "../charts/chart-tooltip";
 import { AmountDisplay, getAmountColorClass } from "../ui/amount-display";
 import { CardContent } from "../ui/card";
 import { Pagination } from "../ui/pagination";
+import { useHoldingsFilter } from "./unrealized-gain-card.client";
 
 const PAGE_SIZE = 10;
 
@@ -17,6 +20,8 @@ interface HoldingItem {
   id: number;
   name: string;
   accountName: string | null;
+  institution: string | null;
+  categoryName: string | null;
   amount: number | null;
   unrealizedGain: number | null;
   unrealizedGainPct: number | null;
@@ -35,15 +40,82 @@ interface CategoryGroup {
 interface HoldingsTableClientProps {
   categories: CategoryGroup[];
   hideAccountName?: boolean;
+  enableSharedFilter?: boolean;
+}
+
+function sortCategoryGroups(categories: readonly CategoryGroup[]): CategoryGroup[] {
+  return sortByAmountDescending(
+    categories.map((group) => ({
+      ...group,
+      items: sortByAmountDescending(
+        group.items,
+        (item) => item.amount,
+        (item) => `${item.name}\u0000${item.id}`,
+      ),
+    })),
+    (group) => group.total,
+    (group) => group.category,
+  );
+}
+
+export function filterCategories(categories: CategoryGroup[], selectedFilter?: string) {
+  if (!selectedFilter || selectedFilter === "__all__") return sortCategoryGroups(categories);
+
+  const [institution, categoryName] = selectedFilter.split("|");
+  return sortCategoryGroups(
+    categories
+      .map((group) => {
+        const items = group.items.filter(
+          (item) =>
+            item.institution === institution &&
+            (categoryName === undefined || item.categoryName === categoryName),
+        );
+        return {
+          ...group,
+          items,
+          total: items.reduce((sum, item) => sum + (item.amount ?? 0), 0),
+        };
+      })
+      .filter((group) => group.items.length > 0),
+  );
+}
+
+export function HoldingsTableTotal({
+  categories,
+  total,
+  enableSharedFilter = false,
+}: {
+  categories: CategoryGroup[];
+  total: number;
+  enableSharedFilter?: boolean;
+}) {
+  const filter = useHoldingsFilter();
+  const filteredCategories = filterCategories(
+    categories,
+    enableSharedFilter ? filter?.selectedFilter : undefined,
+  );
+  const filteredTotal =
+    enableSharedFilter && filter?.selectedFilter !== "__all__"
+      ? filteredCategories.reduce((sum, category) => sum + category.total, 0)
+      : total;
+
+  return <AmountDisplay amount={filteredTotal} size="lg" weight="bold" />;
 }
 
 export function HoldingsTableClient({
   categories,
   hideAccountName = false,
+  enableSharedFilter = false,
 }: HoldingsTableClientProps) {
+  const filter = useHoldingsFilter();
+  const filteredCategories = filterCategories(
+    categories,
+    enableSharedFilter ? filter?.selectedFilter : undefined,
+  );
+
   return (
     <CardContent className="space-y-4">
-      {categories.map(({ category, items, total: categoryTotal }) => (
+      {filteredCategories.map(({ category, items, total: categoryTotal }) => (
         <CategoryCard
           key={category}
           category={category}
@@ -70,6 +142,14 @@ function CategoryCard({
   const [currentPage, setCurrentPage] = useState(0);
   const scrollTargetRef = useRef<HTMLDivElement>(null);
   const totalPages = Math.ceil(items.length / PAGE_SIZE);
+  const lastPage = Math.max(0, totalPages - 1);
+  const visiblePage = Math.min(currentPage, lastPage);
+
+  useEffect(() => {
+    if (currentPage > lastPage) {
+      setCurrentPage(lastPage);
+    }
+  }, [currentPage, lastPage]);
 
   // Colors are generated for all items (for chart consistency)
   const colors = getChartColorArray(items.length);
@@ -81,7 +161,7 @@ function CategoryCard({
   }));
 
   // Paginate items for the list display
-  const startIndex = currentPage * PAGE_SIZE;
+  const startIndex = visiblePage * PAGE_SIZE;
   const paginatedItems = items.slice(startIndex, startIndex + PAGE_SIZE);
 
   return (
@@ -102,7 +182,11 @@ function CategoryCard({
       <div className="flex flex-col sm:flex-row sm:items-start gap-6 p-4">
         {/* Donut chart */}
         <div className="w-56 h-56 shrink-0 self-center sm:self-auto">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer
+            width="100%"
+            height="100%"
+            initialDimension={CHART_INITIAL_DIMENSION}
+          >
             <PieChart>
               <Pie
                 data={chartData}
@@ -146,7 +230,7 @@ function CategoryCard({
 
           {/* Pagination */}
           <Pagination
-            currentPage={currentPage}
+            currentPage={visiblePage}
             totalPages={totalPages}
             pageSize={PAGE_SIZE}
             totalItems={items.length}

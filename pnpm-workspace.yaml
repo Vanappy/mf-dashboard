@@ -10,32 +10,22 @@ allowBuilds:
   workerd: true
 
 minimumReleaseAgeExclude:
-  - ai
-  - "@cloudflare/workerd-*"
-  - "@csstools/css-color-parser"
-  - "@storybook/addon-a11y"
-  - "@storybook/addon-vitest"
-  - "@storybook/builder-vite"
-  - "@storybook/csf-plugin"
-  - "@storybook/nextjs-vite"
-  - "@storybook/react"
-  - "@storybook/react-dom-shim"
-  - "@storybook/react-vite"
-  - "@turbo/*"
-  - "@types/node"
-  - knip
-  - lucide-react
-  - miniflare
-  - storybook
-  - turbo
-  - workerd
-  - wrangler
+  - "@storybook/addon-a11y@10.5.5"
+  - "@storybook/addon-vitest@10.5.5"
+  - "@storybook/builder-vite@10.5.5"
+  - "@storybook/csf-plugin@10.5.5"
+  - "@storybook/nextjs-vite@10.5.5"
+  - "@storybook/react@10.5.5"
+  - "@storybook/react-dom-shim@10.5.5"
+  - "@storybook/react-vite@10.5.5"
+  - storybook@10.5.5
 
 catalog:
   "@libsql/client": 0.17.4
-  "@types/node": 25.9.3
-  "@vitest/browser-playwright": 4.1.9
+  "@types/node": 25.9.5
+  "@vitest/browser-playwright": 4.1.10
   drizzle-orm: 0.45.2
-  playwright: 1.61.0
+  playwright: 1.62.0
+  playwright-core: 1.62.0
   typescript: 6.0.3
-  vitest: 4.1.9
+  vitest: 4.1.10
